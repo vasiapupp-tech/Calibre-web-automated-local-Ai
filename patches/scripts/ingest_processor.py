@@ -1011,7 +1011,7 @@ class NewBookProcessor:
             print(f"[ingest-processor] Attempting to fetch metadata for: {actual_title}", flush=True)
 
             # Fetch and apply metadata (now admin-controlled only)
-            if fetch_and_apply_metadata(book_id):
+            if fetch_and_apply_metadata(book_id, filename=self.filename):
                 print(f"[ingest-processor] Successfully fetched and applied metadata for: {actual_title}", flush=True)
             else:
                 print(f"[ingest-processor] No metadata improvements found for: {actual_title}", flush=True)

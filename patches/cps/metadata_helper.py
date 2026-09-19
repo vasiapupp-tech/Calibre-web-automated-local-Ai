@@ -23,13 +23,14 @@ from cwa_db import CWA_DB
 
 log = logger.create()
 
-def fetch_and_apply_metadata(book_id: int, user_enabled: bool = False) -> bool:
+def fetch_and_apply_metadata(book_id: int, user_enabled: bool = False, filename: str = None) -> bool:
     """
     Fetch metadata for a newly ingested book and apply it if settings allow.
     
     Args:
         book_id: The ID of the book to fetch metadata for
         user_enabled: Deprecated parameter - metadata fetching is now admin-controlled only
+        filename: Optional original filename (used for periodical/issue detection)
         
     Returns:
         bool: True if metadata was successfully fetched and applied, False otherwise
@@ -63,8 +64,19 @@ def fetch_and_apply_metadata(book_id: int, user_enabled: bool = False) -> bool:
                     log.info("Successfully applied AI metadata for book: %s", book.title)
                     ai_applied = True
 
+        # Detect a periodical (magazine) from the original filename.
+        periodical = _detect_periodical(filename)
+
+        # Parse [Series] and {tags} markers from the original filename.
+        filename_series, filename_tags = _parse_filename_markers(filename)
+
         # If AI already set the metadata and the book has an annotation, we're done.
         if ai_applied and _book_has_description(book):
+            if periodical is not None:
+                _apply_periodical(book, periodical[0], periodical[1], periodical[2], periodical[3], calibre_db_instance)
+            _apply_filename_series_and_tags(
+                book, filename_series if periodical is None else None,
+                filename_tags, calibre_db_instance)
             calibre_db_instance.session.close()
             return True
             
@@ -133,6 +145,15 @@ def fetch_and_apply_metadata(book_id: int, user_enabled: bool = False) -> bool:
                 log.warning(f"Error fetching metadata from provider {provider_id}: {e}")
                 continue
                 
+        # Periodical (magazine) detection: unique title + series + series index + year.
+        if periodical is not None:
+            _apply_periodical(book, periodical[0], periodical[1], periodical[2], periodical[3], calibre_db_instance)
+
+        # Apply [Series] and {tags} markers from the filename (series only for non-periodicals).
+        _apply_filename_series_and_tags(
+            book, filename_series if periodical is None else None,
+            filename_tags, calibre_db_instance)
+
         calibre_db_instance.session.close()
         return ai_applied or metadata_found
         
@@ -585,6 +606,143 @@ def _apply_description_only(book, description, calibre_db_instance) -> bool:
     else:
         comment = db.Comments(normalized, book.id)
         calibre_db_instance.session.add(comment)
+    return True
+
+
+def _detect_periodical(filename):
+    """Detect a periodical (magazine) from a filename.
+
+    Returns ``(name, year, issue)`` or ``None``. ``name`` and ``year`` may be
+    empty strings when they cannot be determined from the filename (in which case
+    the caller falls back to the book title / no year). Recognises:
+      - ``"Magazine_YYYY_MM"`` / ``"Magazine_YYYY_MM-MM"`` (name, year, issue);
+      - a leading 3-digit number (``"120 Sistiemnyi Administr"``);
+      - a trailing 2-3 digit number (``"PROgrammist08"``).
+    """
+    if not filename:
+        return None
+    s = str(filename).strip()
+    s = os.path.splitext(s)[0].strip().strip(' ._-')
+    if len(s) < 4:
+        return None
+    # New canonical format: "Magazine_YYYY_MM", "Magazine_YYYY_MM-MM", optional "_ua"/"_ru".
+    m = re.match(r'^(.+?)_((?:19|20)\d{2})_(\d{1,3})(?:-(\d{1,3}))?(?:_(ua|ru))?$', s)
+    if m:
+        name = m.group(1).strip()
+        year = m.group(2)
+        issue = m.group(3) + ('-' + m.group(4) if m.group(4) else '')
+        return name, year, issue, m.group(5) or ''
+    # Leading 3-digit issue number (old loose format).
+    m = re.match(r'^(\d{3})[\s._\-]+(\D.*)$', s)
+    if m:
+        return '', '', m.group(1), ''
+    # Trailing issue number (old loose format).
+    m = re.match(r'^(\D.*?\D)(\d{2,3})$', s)
+    if m:
+        return '', '', m.group(2), ''
+    return None
+
+
+def _parse_filename_markers(filename):
+    """Parse a ``[Series]`` prefix and a ``{tag1, tag2}`` suffix from a filename.
+
+    Returns ``(series_name, tags_list)``. ``series_name`` is ``None`` when there is
+    no ``[Series]`` marker; ``tags_list`` is a (possibly empty) list of tag names.
+    """
+    if not filename:
+        return None, []
+    s = str(filename).strip()
+    s = os.path.splitext(s)[0].strip()
+    series_name = None
+    tags = []
+    m = re.match(r'^\[([^\]]+)\]\s*', s)
+    if m:
+        series_name = m.group(1).strip()
+    m = re.search(r'\{([^{}]+)\}\s*$', s)
+    if m:
+        tags = [t.strip() for t in m.group(1).split(',') if t.strip()]
+    return series_name, tags
+
+
+def _apply_filename_series_and_tags(book, series_name, tags, calibre_db_instance) -> bool:
+    """Apply a series name and tags parsed from the original filename.
+
+    The series is only set when the book has no other (periodical) series; tags are
+    appended to the existing tags.
+    """
+    updated = False
+    if series_name:
+        series = calibre_db_instance.get_series_by_name(series_name)
+        if not series:
+            series = db.Series(series_name, series_name)
+            calibre_db_instance.session.add(series)
+        existing_series = {s.name for s in book.series} if book.series else set()
+        if series_name not in existing_series:
+            book.series.append(series)
+            updated = True
+    if tags:
+        for tag_name in tags:
+            if not tag_name:
+                continue
+            tag = calibre_db_instance.get_tag_by_name(tag_name)
+            if not tag:
+                tag = db.Tags(name=tag_name)
+                calibre_db_instance.session.add(tag)
+            if tag not in book.tags:
+                book.tags.append(tag)
+                updated = True
+    if updated:
+        calibre_db_instance.session.commit()
+    return updated
+
+
+def _issue_to_index(issue):
+    """'05' -> 5.0 ; '04-05' -> 4.5."""
+    if '-' in issue:
+        a, b = issue.split('-')
+        return (float(a) + float(b)) / 2.0
+    return float(issue)
+
+
+def _apply_periodical(book, name, year, issue, lang, calibre_db_instance) -> bool:
+    """Mark a book as a periodical: unique title + series + series index + year."""
+    title = (book.title or '').strip()
+
+    if name:
+        magazine_name = name + (' (%s)' % lang if lang else '')
+    else:
+        # Fall back to the book title (from AI/online metadata); strip any leading
+        # or trailing issue number the raw filename may have left behind.
+        if not title:
+            return False
+        title = re.sub(r'^%s[\s._\-]+' % issue, '', title)  # "120 Sistiemnyi" -> "Sistiemnyi"
+        title = re.sub(r'\d+$', '', title).strip(' ._-')    # "PROgrammist08" -> "PROgrammist"
+        if not title:
+            return False
+        magazine_name = title
+
+    if ('№%s' % issue) not in magazine_name:
+        if year:
+            book.title = '%s %s №%s' % (magazine_name, year, issue)
+        else:
+            book.title = '%s №%s' % (magazine_name, issue)
+
+    series = calibre_db_instance.get_series_by_name(magazine_name)
+    if not series:
+        series = db.Series(magazine_name, magazine_name)
+        calibre_db_instance.session.add(series)
+    book.series = [series]
+    book.series_index = str(_issue_to_index(issue))
+
+    if year:
+        try:
+            from datetime import datetime
+            book.pubdate = datetime(int(year), 1, 1)
+        except Exception:
+            pass
+
+    log.info("Detected periodical for book %s: %s №%s (%s)", book.id, magazine_name, issue, year or '-')
+    calibre_db_instance.session.commit()
     return True
 
 
