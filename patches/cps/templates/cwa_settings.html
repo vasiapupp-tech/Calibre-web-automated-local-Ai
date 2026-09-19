@@ -320,6 +320,57 @@
         {{_('Base URL of the local AI server (llama-server). Example: http://172.17.0.1:8899')}}
       </p>
 
+      <label for="ai_api_key" style="padding-left: 10px;">{{_('AI API Key')}}:</label>
+      <input type="password" id="ai_api_key" name="ai_api_key" value="{{ cwa_settings['ai_api_key'] }}" style="width: 300px; margin-left: 10px; color: #000000; background-color: #ffffff;">
+      <p class="cwa-settings-tooltip">
+        {{_('API key for an external OpenAI-compatible provider (DeepSeek, OpenRouter, etc.). Leave empty for a local server.')}}
+      </p>
+
+      <label for="ai_model" style="padding-left: 10px;">{{_('AI Model')}}:</label>
+      <input type="text" id="ai_model" name="ai_model" value="{{ cwa_settings['ai_model'] }}" style="width: 300px; margin-left: 10px; color: #000000; background-color: #ffffff;">
+      <p class="cwa-settings-tooltip">
+        {{_('Model name (e.g. deepseek-chat, openrouter/..., gpt-4o). Leave empty for a local single-model server.')}}
+      </p>
+
+      {% if cwa_settings['ai_text_mode'] %}
+      <input type="checkbox" id="ai_text_mode" name="ai_text_mode" value="True" checked style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="The AI is text-only (e.g. DeepSeek) — send extracted book text instead of page images">
+      {% else %}
+      <input type="checkbox" id="ai_text_mode" name="ai_text_mode" value="True" style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="The AI is text-only (e.g. DeepSeek) — send extracted book text instead of page images">
+      {% endif %}
+      <label for="ai_text_mode" style="padding-left: 10px;">{{_('AI: Text-only mode (no images)')}}</label><br>
+      <p class="cwa-settings-tooltip">
+        {{_('Enable for text-only models like deepseek-chat. The AI will receive the book text (PDF text layer / epub / fb2) instead of page images. Scanned PDFs without a text layer will yield nothing.')}}
+      </p>
+
+      {% if cwa_settings['ai_metadata_series_enabled'] %}
+      <input type="checkbox" id="ai_metadata_series_enabled" name="ai_metadata_series_enabled" value="True" checked style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Detect the book series and its number (volume/issue/part) from the title page">
+      {% else %}
+      <input type="checkbox" id="ai_metadata_series_enabled" name="ai_metadata_series_enabled" value="True" style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Detect the book series and its number (volume/issue/part) from the title page">
+      {% endif %}
+      <label for="ai_metadata_series_enabled" style="padding-left: 10px;">{{_('AI: Detect Series and Number')}}</label><br>
+      <p class="cwa-settings-tooltip">
+        {{_('Ask the AI to find the series (серия/цикл/том/книга/часть/выпуск) and its number on the first pages.')}}
+      </p>
+
+      {% if cwa_settings['ai_metadata_annotation_enabled'] %}
+      <input type="checkbox" id="ai_metadata_annotation_enabled" name="ai_metadata_annotation_enabled" value="True" checked style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Extract the book annotation/description from the first pages and back cover">
+      {% else %}
+      <input type="checkbox" id="ai_metadata_annotation_enabled" name="ai_metadata_annotation_enabled" value="True" style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Extract the book annotation/description from the first pages and back cover">
+      {% endif %}
+      <label for="ai_metadata_annotation_enabled" style="padding-left: 10px;">{{_('AI: Extract Annotation')}}</label><br>
+      <p class="cwa-settings-tooltip">
+        {{_('Ask the AI to read the annotation/description (обычно на обороте титула или задней обложке).')}}
+      </p>
+
+      <label for="ai_metadata_mode" style="padding-left: 10px;">{{_('AI Mode')}}:</label>
+      <select id="ai_metadata_mode" name="ai_metadata_mode" style="margin-left: 10px;">
+        <option value="staged" {% if cwa_settings['ai_metadata_mode'] == 'staged' %}selected{% endif %}>staged (точнее, 3 запроса)</option>
+        <option value="fast" {% if cwa_settings['ai_metadata_mode'] == 'fast' %}selected{% endif %}>fast (быстрее, 1 запрос)</option>
+      </select>
+      <p class="cwa-settings-tooltip">
+        {{_('staged — отдельные запросы для названия, серии и аннотации (точнее, медленнее); fast — один запрос.')}}
+      </p>
+
       {% if cwa_settings['auto_metadata_smart_application'] %}
       <input type="checkbox" id="auto_metadata_smart_application" name="auto_metadata_smart_application" value="True" checked style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Apply intelligent criteria when replacing existing metadata">
       {% else %}

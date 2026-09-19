@@ -5,8 +5,10 @@
 #   2) порт            — свободный порт хоста (например 1232:8083)
 #   3) пути библиотеки и папки импорта (своя тематика)
 #
-# После первого запуска (когда CWA скопирует свой код в ./app) примените патчи
-# из ./patches (см. README.md).
+# После того как скрипт setup_new_container.sh скопирует код CWA из образа
+# в ./app, примените патчи из ./patches (см. README.md).
+# Важно: bind mount ./app:/app НЕ копирует код из образа автоматически —
+# сначала нужно извлечь его (docker create + docker cp).
 
 services:
   calibre-books-topic:            # <-- имя сервиса (можно любое)
@@ -20,7 +22,7 @@ services:
       - DOCKER_MODS=crocodilestick/mods:universal-calibre
     volumes:
       - ./config:/config                                        # настройки и БД
-      - ./app:/app                                              # код CWA (сюда копировать патчи)
+#      - ./app:/app                                              # код CWA (сюда копировать патчи)
       - ./custom-cont-init.d:/custom-cont-init.d:ro             # DJVU support (djvulibre + regex)
       - ~/data/calibre/books_topic:/calibre-library    # <-- библиотека (своя папка)
       - ~/data/calibre/books_topic_dwl:/cwa-book-ingest # <-- папка импорта

@@ -80,25 +80,26 @@ echo "docker-compose.yml подготовлен:"
 grep -E "container_name|books_|:8083" docker-compose.yml | sed 's/^/    /'
 echo
 
-# 4. Первый запуск (образ CWA скопирует свой код в ./app)
-echo "=== Первый запуск контейнера... ==="
-docker compose up -d
+# 4. Копируем код CWA из образа в ./app.
+#    bind mount ./app:/app НЕ копирует код из образа автоматически: пустая
+#    папка ./app «затмевает» код в образе. Поэтому извлекаем его из образа
+#    через временный контейнер, как и в вашем варианте, но без comment/restart.
+echo "=== Копирование кода CWA из образа в ./app... ==="
+docker create --name "${CONTAINER_NAME}-tmp" ghcr.io/crocodilestick/calibre-web-automated:latest >/dev/null
+mkdir -p "$PROJECT_DIR/app"
+docker cp "${CONTAINER_NAME}-tmp:/app/." "$PROJECT_DIR/app/"
+docker rm "${CONTAINER_NAME}-tmp" >/dev/null
 
-# 5. Ждём появления кода CWA в ./app (до ~10 минут)
-echo "=== Ожидание готовности (код CWA копируется в ./app)... ==="
 APP_TARGET="$PROJECT_DIR/app/calibre-web-automated/cps/metadata_helper.py"
-for i in $(seq 1 120); do
-    if [ -f "$APP_TARGET" ]; then
-        break
-    fi
-    sleep 5
-done
-
 if [ ! -f "$APP_TARGET" ]; then
-    echo "ОШИБКА: код CWA не появился в ./app за 10 минут." >&2
+    echo "ОШИБКА: не удалось скопировать код CWA в ./app." >&2
     exit 1
 fi
 echo "Код CWA скопирован в ./app."
+
+# 5. Первый запуск контейнера
+echo "=== Запуск контейнера... ==="
+docker compose up -d
 
 # 6. Применяем патчи (изменённые файлы CWA)
 echo "=== Применение патчей... ==="
