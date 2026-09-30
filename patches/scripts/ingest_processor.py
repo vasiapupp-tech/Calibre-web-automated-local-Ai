@@ -551,8 +551,10 @@ class NewBookProcessor:
         pdf_path = os.path.splitext(djvu_path)[0] + '.pdf'
         print(f"[ingest-processor]: Converting DJVU to PDF: {self.filename}...", flush=True)
         try:
+            # -subsample=1 renders at the DJVU's full native resolution (max quality).
+            # A higher subsample factor (e.g. 2) halves the resolution and produces blurry pages.
             result = subprocess.run(
-                ['ddjvu', '-format=pdf', '-subsample=2', djvu_path, pdf_path],
+                ['ddjvu', '-format=pdf', '-subsample=1', djvu_path, pdf_path],
                 capture_output=True, text=True, timeout=1800,
             )
         except Exception as e:
@@ -1011,7 +1013,7 @@ class NewBookProcessor:
             print(f"[ingest-processor] Attempting to fetch metadata for: {actual_title}", flush=True)
 
             # Fetch and apply metadata (now admin-controlled only)
-            if fetch_and_apply_metadata(book_id):
+            if fetch_and_apply_metadata(book_id, filename=self.filename):
                 print(f"[ingest-processor] Successfully fetched and applied metadata for: {actual_title}", flush=True)
             else:
                 print(f"[ingest-processor] No metadata improvements found for: {actual_title}", flush=True)

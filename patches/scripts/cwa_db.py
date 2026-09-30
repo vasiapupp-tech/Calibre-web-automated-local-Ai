@@ -504,7 +504,13 @@ class CWA_DB:
             'ingest_stale_temp_interval': 600,
             'cover_download_max_mb': 15,
             'auto_metadata_ai_enabled': 0,
-            'ai_metadata_url': 'http://172.17.0.1:8899'
+            'ai_metadata_url': 'http://172.17.0.1:8899',
+            'ai_metadata_series_enabled': 1,
+            'ai_metadata_annotation_enabled': 1,
+            'ai_metadata_mode': 'staged',
+            'ai_api_key': '',
+            'ai_model': '',
+            'ai_text_mode': 0
         }
         
         # Apply defaults for missing keys
