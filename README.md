@@ -266,6 +266,7 @@ docker compose up -d
 
 ```bash
 docker ps --filter name=Books-Topic
+docker cp Books-Topic:/app/. ./app/ 
 ```
 
 ### Шаг 5. Применить патчи (изменённые файлы)
@@ -273,6 +274,10 @@ docker ps --filter name=Books-Topic
 ```bash
 cd ~/data/.app/calibre/books_topic
 cp -r ~/data/calibre/cwa_doc/patches/* ./app/calibre-web-automated/
+```
+Раскоментируйте строку ./app:/app в файле docker-compose.yml
+
+```bash
 docker compose restart
 ```
 
