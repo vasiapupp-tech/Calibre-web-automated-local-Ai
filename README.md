@@ -275,7 +275,7 @@ docker cp Books-Topic:/app/. ./app/
 cd ~/data/.app/calibre/books_topic
 cp -r ~/data/calibre/cwa_doc/patches/* ./app/calibre-web-automated/
 ```
-Раскоментируйте строку ./app:/app в файле docker-compose.yml
+Раскомментируйте строку ./app:/app в файле docker-compose.yml
 
 ```bash
 docker compose restart
